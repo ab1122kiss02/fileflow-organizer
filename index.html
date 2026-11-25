@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FileFlow 智慧檔案整理儀表板</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Header -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+            <path d="M9 13h6M12 10v6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <h1>FileFlow 檔案整理助手</h1>
+          <p class="brand-sub">純前端本機授權整理 ・ 零上傳、先預覽、可復原</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <span id="apiBadge" class="status-badge">偵測瀏覽器支援中...</span>
+        <button id="themeToggleBtn" class="btn btn-ghost" title="切換深色 / 淺色模式" type="button">
+          <span id="themeIcon">🌙</span>
+        </button>
+        <button id="demoBtn" class="btn btn-secondary" type="button">
+          ✨ 模擬體驗模式
+        </button>
+        <button id="pickFolderBtn" class="btn btn-primary" type="button">
+          📁 選擇本機資料夾
+        </button>
+      </div>
+    </header>
+
+    <!-- Compatibility / Context Notice Banner -->
+    <div id="contextBanner" class="banner banner-warning hidden" role="alert">
+      <div class="banner-content">
+        <strong>無法使用本機資料夾存取 API</strong>
+        <span id="contextBannerMsg">請透過 <code>http://localhost</code>（執行 <code>start.bat</code>）並使用最新版 Chrome 或 Edge 開啟，或先使用「模擬體驗模式」試用介面。</span>
+      </div>
+    </div>
+
+    <!-- Active Folder Bar -->
+    <section id="workspaceBar" class="workspace-bar hidden">
+      <div class="workspace-info">
+        <span class="workspace-pill" id="modePill">本機模式</span>
+        <span class="workspace-folder">目前資料夾：<strong id="folderNameText">-</strong></span>
+        <span class="workspace-time" id="scanTimeText"></span>
+      </div>
+      <div class="workspace-controls">
+        <button id="rescanBtn" class="btn btn-secondary btn-sm" type="button">🔄 重新掃描</button>
+        <button id="undoBtn" class="btn btn-warning btn-sm hidden" type="button">↩️ 復原上次整理</button>
+        <button id="exportLogBtn" class="btn btn-ghost btn-sm hidden" type="button">📄 匯出記錄</button>
+      </div>
+    </section>
+
+    <!-- Empty Welcome State -->
+    <main id="emptyState" class="empty-state">
+      <div class="empty-card">
+        <div class="empty-icon">🗂️</div>
+        <h2>一鍵將雜亂資料夾整理得井井有條</h2>
+        <p>
+          所有檔案掃描與移動皆透過瀏覽器 <strong>File System Access API</strong> 直接在您的電腦本機執行，檔案不會上傳至任何伺服器。
+        </p>
+        <div class="empty-features">
+          <div class="feature-item">
+            <span>📊</span>
+            <div>
+              <strong>視覺化分析儀表板</strong>
+              <p>即時統計各類型檔案數量與容量佔比</p>
+            </div>
+          </div>
+          <div class="feature-item">
+            <span>🔍</span>
+            <div>
+              <strong>執行前完整預覽</strong>
+              <p>清楚確認每個檔案的去向，支援勾選排除</p>
+            </div>
+          </div>
+          <div class="feature-item">
+            <span>🛡️</span>
+            <div>
+              <strong>安全不覆蓋與一鍵復原</strong>
+              <p>同名檔案自動編號，並保留本次工作階段復原能力</p>
+            </div>
+          </div>
+        </div>
+        <div class="empty-cta">
+          <button id="emptyPickBtn" class="btn btn-primary btn-lg" type="button">📁 選擇要整理的資料夾</button>
+          <button id="emptyDemoBtn" class="btn btn-secondary btn-lg" type="button">✨ 先用範例資料試玩看看</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Main Dashboard (shown after scan) -->
+    <main id="dashboard" class="dashboard hidden">
+      <!-- KPI Row -->
+      <section class="kpi-grid" aria-label="掃描統計摘要">
+        <article class="kpi-card">
+          <div class="kpi-label">掃描檔案總數</div>
+          <div class="kpi-value" id="kpiTotalFiles">0</div>
+          <div class="kpi-meta" id="kpiTotalFolders">含 0 個子資料夾</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label">檔案總容量</div>
+          <div class="kpi-value" id="kpiTotalSize">0 B</div>
+          <div class="kpi-meta" id="kpiAvgSize">平均大小 0 B</div>
+        </article>
+        <article class="kpi-card kpi-accent">
+          <div class="kpi-label">待移動整理數</div>
+          <div class="kpi-value" id="kpiMoveCount">0</div>
+          <div class="kpi-meta" id="kpiMoveSize">預計整理 0 B</div>
+        </article>
+        <article class="kpi-card">
+          <div class="kpi-label">目標分類資料夾</div>
+          <div class="kpi-value" id="kpiTargetFolders">0</div>
+          <div class="kpi-meta" id="kpiConflictCount">0 個同名衝突將自動編號</div>
+        </article>
+      </section>
+
+      <!-- Charts Row -->
+      <section class="charts-grid">
+        <article class="panel">
+          <div class="panel-header">
+            <h3>檔案類型數量分佈</h3>
+            <span class="panel-hint">點擊圖例可篩選下方預覽</span>
+          </div>
+          <div class="chart-wrap donut-layout">
+            <div id="donutChart" class="svg-chart-box"></div>
+            <div id="donutLegend" class="chart-legend"></div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <h3>各類型容量佔比</h3>
+            <span class="panel-hint">依檔案總大小排序</span>
+          </div>
+          <div id="sizeBarChart" class="bar-chart-list"></div>
+        </article>
+      </section>
+
+      <!-- Rules + Preview Split -->
+      <section class="workspace-grid">
+        <!-- Left: Classification Rules & Options -->
+        <aside class="panel rules-panel">
+          <div class="panel-header">
+            <h3>整理規則設定</h3>
+            <button id="addRuleBtn" class="btn btn-ghost btn-sm" type="button">＋ 新增規則</button>
+          </div>
+
+          <div class="options-group">
+            <label class="toggle-row">
+              <input type="checkbox" id="optRecursive" />
+              <span>掃描子資料夾內的檔案</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="optSkipTargetFolders" checked />
+              <span>略過已在分類資料夾內的檔案</span>
+            </label>
+            <label class="toggle-row">
+              <input type="checkbox" id="optMoveOthers" />
+              <span>將未匹配檔案移入「其他」資料夾</span>
+            </label>
+            <div class="select-row">
+              <label for="optConflict">同名檔案處理：</label>
+              <select id="optConflict">
+                <option value="rename" selected>自動加上序號 (1)</option>
+                <option value="skip">略過不移動</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="rules-divider"></div>
+          <div id="rulesList" class="rules-list"></div>
+        </aside>
+
+        <!-- Right: Preview Table & Execution -->
+        <section class="panel preview-panel">
+          <div class="panel-header preview-header">
+            <div>
+              <h3>整理預覽清單</h3>
+              <p class="panel-sub" id="previewSummaryText">共 0 個項目</p>
+            </div>
+            <div class="preview-actions">
+              <button id="executeBtn" class="btn btn-primary" type="button">
+                🚀 一鍵執行整理 (<span id="executeCount">0</span>)
+              </button>
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div id="progressBox" class="progress-box hidden">
+            <div class="progress-top">
+              <span id="progressLabel">準備執行...</span>
+              <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-track">
+              <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Result Banner -->
+          <div id="resultBanner" class="banner banner-success hidden">
+            <span id="resultBannerMsg"></span>
+          </div>
+
+          <!-- Filters -->
+          <div class="filter-bar">
+            <input type="search" id="searchInput" class="input-search" placeholder="搜尋檔名或副檔名..." />
+            <select id="categoryFilter" class="input-select">
+              <option value="all">全部分類</option>
+            </select>
+            <select id="statusFilter" class="input-select">
+              <option value="all">全部狀態</option>
+              <option value="move">僅顯示待移動</option>
+              <option value="skip">僅顯示略過/不移動</option>
+            </select>
+            <div class="bulk-select-btns">
+              <button id="selectAllBtn" class="btn btn-ghost btn-sm" type="button">全選待移動</button>
+              <button id="deselectAllBtn" class="btn btn-ghost btn-sm" type="button">取消全選</button>
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class="table-wrap">
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th class="col-check"><input type="checkbox" id="masterCheckbox" title="全選/取消" /></th>
+                  <th>檔案名稱</th>
+                  <th>大小</th>
+                  <th>分類</th>
+                  <th>移動路徑預覽</th>
+                  <th>狀態</th>
+                </tr>
+              </thead>
+              <tbody id="previewTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: Add / Edit Rule -->
+  <div id="ruleModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="ruleModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="ruleModalTitle">編輯分類規則</h3>
+        <button id="closeModalBtn" class="btn btn-ghost btn-sm" type="button">✕</button>
+      </div>
+      <form id="ruleForm" class="modal-body">
+        <input type="hidden" id="ruleIdInput" />
+        <div class="form-field">
+          <label for="ruleIconInput">圖示 Emoji</label>
+          <input type="text" id="ruleIconInput" maxlength="4" value="📁" required />
+        </div>
+        <div class="form-field">
+          <label for="ruleFolderInput">目標資料夾名稱</label>
+          <input type="text" id="ruleFolderInput" placeholder="例如：圖片、設計稿" required />
+        </div>
+        <div class="form-field">
+          <label for="ruleColorInput">標籤顏色</label>
+          <input type="color" id="ruleColorInput" value="#6366f1" />
+        </div>
+        <div class="form-field">
+          <label for="ruleExtInput">包含副檔名（以逗號分隔，不含點）</label>
+          <textarea id="ruleExtInput" rows="3" placeholder="例如：jpg, png, webp, svg" required></textarea>
+        </div>
+        <div class="modal-footer">
+          <button id="deleteRuleBtn" class="btn btn-danger hidden" type="button">刪除此規則</button>
+          <div class="modal-footer-right">
+            <button id="cancelModalBtn" class="btn btn-secondary" type="button">取消</button>
+            <button class="btn btn-primary" type="submit">儲存規則</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
